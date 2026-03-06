@@ -1,0 +1,78 @@
+# ========================
+# Test & Coverage Artifacts
+# ========================
+coverage.out
+coverage.html
+*.coverprofile
+coverage/
+
+# ========================
+# Profiling Artifacts
+# ========================
+*.prof
+*.pprof
+*.trace
+
+# ========================
+# Go Test Binaries
+# ========================
+*.test
+*.test.exe
+
+# ========================
+# Go Build Artifacts
+# ========================
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+dist/
+vendor/
+
+# ========================
+# Debug Binaries
+# ========================
+__debug_bin*
+
+# ========================
+# IDE & Editor
+# ========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ========================
+# OS Generated
+# ========================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ========================
+# Logs
+# ========================
+*.log
+logs/
+
+# ========================
+# Temp Files
+# ========================
+tmp/
+temp/
+*.tmp
+
+# ========================
+# Review / Internal Docs
+# ========================
+REVIEW_REPORT.md

@@ -1,0 +1,3 @@
+// Package integration contains integration tests for Niyantrak.
+// Run with: go test -tags integration -v -count=1 ./integration/...
+package integration

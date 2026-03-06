@@ -1,0 +1,570 @@
+# Niyantrak - Reference Configuration File
+# This file demonstrates all available configuration options for the Niyantrak rate limiter library.
+# Use this as a reference when configuring your own rate limiting setup.
+
+# ============================================================================
+# SECTION 1: BASIC RATE LIMITING
+# Simple single-key rate limiting with Token Bucket algorithm
+# ============================================================================
+basic:
+  # Algorithm to use: token_bucket, leaky_bucket, fixed_window, sliding_window, gcra
+  algorithm: token_bucket
+  
+  # Token Bucket specific configuration
+  token_bucket:
+    capacity: 100              # Max tokens in bucket
+    refill_rate: 10            # Tokens added per refill period
+    refill_period: "1s"        # How often to refill (1s, 1m, 1h)
+    initial_tokens: 100        # Starting tokens (defaults to capacity if 0)
+  
+  # Default limit for new keys
+  default_limit: 100           # Max requests
+  default_window: "1m"         # Time window (1s, 1m, 1h, 24h)
+  
+  # How long to keep state for inactive keys
+  key_ttl: "1h"                # Expires after 1 hour of inactivity
+  
+  # Backend storage
+  backend:
+    type: memory               # Options: memory, redis, postgresql
+    # For memory backend, no additional config needed
+  
+  # Observability (optional)
+  observability:
+    logging:
+      enabled: true
+      level: "info"            # debug, info, warn, error
+    metrics:
+      enabled: true
+      prometheus: true
+    tracing:
+      enabled: false
+      opentelemetry: true
+  
+  # Failover strategy (optional)
+  failover:
+    enabled: true
+    strategy: "fail_open"      # Options: fail_open, fail_closed, local_fallback
+    health_check_interval: "10s"
+    failure_threshold: 5       # Consecutive failures to trigger fallback
+    auto_recovery: true
+
+
+# ============================================================================
+# SECTION 2: TIER-BASED RATE LIMITING
+# Different rate limits per subscription tier (free, pro, enterprise)
+# ============================================================================
+tier_based:
+  algorithm: token_bucket
+  
+  token_bucket:
+    capacity: 1000
+    refill_rate: 100
+    refill_period: "1m"
+  
+  default_limit: 1000
+  default_window: "1m"
+  key_ttl: "24h"
+  
+  backend:
+    type: redis
+    redis:
+      addr: "localhost:6379"
+      db: 0
+      password: ""             # Leave empty if no auth
+      max_retries: 3
+  
+  # Tier configuration
+  tiers:
+    free:
+      limit: 100
+      window: "1h"
+      description: "Free tier users"
+    
+    pro:
+      limit: 10000
+      window: "1h"
+      description: "Pro tier users"
+    
+    enterprise:
+      limit: 100000
+      window: "1h"
+      description: "Enterprise tier users with unlimited access"
+  
+  observability:
+    logging:
+      enabled: true
+      level: "info"
+    metrics:
+      enabled: true
+  
+  failover:
+    enabled: true
+    strategy: "local_fallback"
+    health_check_interval: "5s"
+
+
+# ============================================================================
+# SECTION 3: TENANT-BASED RATE LIMITING
+# Multi-tenant application with per-organization limits
+# ============================================================================
+tenant_based:
+  algorithm: token_bucket
+  
+  token_bucket:
+    capacity: 50000
+    refill_rate: 5000
+    refill_period: "1h"
+  
+  default_limit: 5000
+  default_window: "1h"
+  key_ttl: "24h"
+  
+  backend:
+    type: redis
+    redis:
+      addr: "localhost:6379"
+      db: 1                     # Different DB for tenant data
+      password: ""
+      max_retries: 3
+  
+  # Tenant configuration
+  tenants:
+    org_acme:
+      limit: 50000
+      window: "1h"
+      description: "ACME Corporation"
+    
+    org_techcorp:
+      limit: 100000
+      window: "1h"
+      description: "TechCorp Inc"
+  
+  # Key extraction strategy for identifying tenants
+  key_extraction:
+    strategy: "header"         # header, path, query, context
+    source: "X-Tenant-ID"      # For header strategy
+  
+  observability:
+    logging:
+      enabled: true
+      level: "info"
+    metrics:
+      enabled: true
+  
+  dynamic_limits:
+    enabled: true
+    allow_online_updates: true
+    graceful_switching: true
+    switching_period: "5m"
+
+
+# ============================================================================
+# SECTION 4: COST-BASED RATE LIMITING
+# Different "costs" for different operations (e.g., export costs 10 tokens)
+# ============================================================================
+cost_based:
+  algorithm: token_bucket
+  
+  token_bucket:
+    capacity: 1000
+    refill_rate: 100
+    refill_period: "1m"
+  
+  default_limit: 1000
+  default_window: "1m"
+  
+  backend:
+    type: memory
+    # Can also add Redis for distributed deployments
+  
+  # Operation costs
+  operations:
+    read_user:
+      cost: 1
+      description: "Reading a user record"
+    
+    list_users:
+      cost: 5
+      description: "Listing all users (more expensive)"
+    
+    create_user:
+      cost: 10
+      description: "Creating a new user"
+    
+    export_csv:
+      cost: 50
+      description: "Exporting large CSV file"
+    
+    generate_report:
+      cost: 100
+      description: "Generating complex analytics report"
+  
+  observability:
+    logging:
+      enabled: true
+      level: "info"
+    metrics:
+      enabled: true
+
+
+# ============================================================================
+# SECTION 5: COMPOSITE RATE LIMITING
+# Multiple overlapping limits (per-second AND per-minute AND per-hour)
+# ============================================================================
+composite:
+  backend:
+    type: redis
+    redis:
+      addr: "localhost:6379"
+      db: 2
+      password: ""
+      max_retries: 3
+  
+  # Define multiple limits that all must be satisfied
+  limits:
+    - name: "per_second"
+      algorithm: "token_bucket"
+      limit: 100
+      window: "1s"
+      priority: 1              # Higher priority (checked first)
+      description: "100 req/sec per user"
+    
+    - name: "per_minute"
+      algorithm: "token_bucket"
+      limit: 5000
+      window: "1m"
+      priority: 2
+      description: "5000 req/min per user"
+    
+    - name: "per_hour"
+      algorithm: "token_bucket"
+      limit: 100000
+      window: "1h"
+      priority: 3
+      description: "100k req/hour per user"
+  
+  observability:
+    logging:
+      enabled: true
+      level: "debug"           # More verbose for composite debugging
+    metrics:
+      enabled: true
+
+
+# ============================================================================
+# SECTION 6: ALGORITHM CONFIGURATIONS
+# Examples of different rate limiting algorithms
+# ============================================================================
+
+algorithms:
+  # Token Bucket - Best for most use cases
+  # Allows burst traffic while maintaining average rate
+  token_bucket_config:
+    capacity: 100
+    refill_rate: 10
+    refill_period: "1s"
+    initial_tokens: 100
+  
+  # Leaky Bucket - Smooth traffic to constant rate
+  # Good for preventing traffic spikes
+  leaky_bucket_config:
+    capacity: 100              # Queue size
+    leak_rate: 10              # Items per leak period
+    leak_period: "1s"
+    queue_behavior: "drop"     # Options: drop, reject
+  
+  # Fixed Window - Simple counter reset at boundaries
+  # Good for monthly/daily quotas
+  fixed_window_config:
+    limit: 1000
+    window: "1h"
+    window_alignment: "hour"   # Align to clock hours
+  
+  # Sliding Window - More accurate than fixed
+  # Good for precise rate limiting
+  sliding_window_config:
+    limit: 1000
+    window: "1m"
+    precision: "100ms"         # Granularity
+    bucket_count: 60           # Number of buckets
+  
+  # GCRA - Generic Cell Rate Algorithm
+  # Precise rate limiting for distributed systems
+  gcra_config:
+    limit: 1000
+    period: "1m"
+    burst_size: 10             # Allow temporary bursts
+
+
+# ============================================================================
+# SECTION 7: BACKEND CONFIGURATIONS
+# Different storage backends for different scenarios
+# ============================================================================
+
+backends:
+  # Memory Backend - Single instance, highest performance
+  memory_backend:
+    type: memory
+    # Memory backend has no additional configuration
+    # Use for: Development, testing, single-instance services
+  
+  # Redis Backend - Multi-instance distributed
+  redis_backend:
+    type: redis
+    redis:
+      addr: "localhost:6379"   # Single node
+      db: 0                     # Redis database number
+      password: ""              # Set if Redis auth enabled
+      max_retries: 3           # Retry failed operations
+    # For Redis Cluster:
+    # cluster:
+    #   nodes:
+    #     - "redis-1:6379"
+    #     - "redis-2:6379"
+    #     - "redis-3:6379"
+  
+  # PostgreSQL Backend - Persistent storage with audit trail
+  postgresql_backend:
+    type: postgresql
+    postgresql:
+      dsn: "user=ratelimit password=secret host=localhost port=5432 dbname=ratelimiter sslmode=disable"
+      max_connections: 25      # Connection pool size
+    # Use for: Persistent requirements, compliance, complex queries
+  
+  # Custom Backend - Implement Backend interface
+  custom_backend:
+    type: custom
+    implementation: "my_custom_backend.CustomStore"
+
+
+# ============================================================================
+# SECTION 8: MIDDLEWARE CONFIGURATIONS
+# HTTP and gRPC middleware integration
+# ============================================================================
+
+middleware:
+  # HTTP Middleware configuration
+  http:
+    # Key extraction strategy
+    key_extractor:
+      strategy: "header"       # Options: header, query, path, context, composite
+      source: "X-API-Key"      # For header strategy
+    
+    # Skip certain paths
+    skip_paths:
+      - "/health"
+      - "/ready"
+      - "/metrics"
+      - "/docs"
+    
+    # Skip certain HTTP methods
+    skip_methods:
+      - "OPTIONS"
+    
+    # Custom rate limit headers
+    headers:
+      limit: "X-RateLimit-Limit"
+      remaining: "X-RateLimit-Remaining"
+      reset: "X-RateLimit-Reset"
+      retry_after: "Retry-After"
+    
+    # Enable detailed headers
+    detailed_headers: true     # Includes more info
+  
+  # gRPC Middleware configuration
+  grpc:
+    # Key extraction from gRPC context
+    key_extractor:
+      strategy: "metadata"     # Extract from gRPC metadata
+      source: "x-api-key"      # Metadata key
+    
+    # Skip certain RPC methods
+    skip_methods:
+      - "/grpc.health.v1.Health/Check"
+      - "/grpc.health.v1.Health/Watch"
+    
+    # Include rate limit info in response metadata
+    enable_metadata: true
+    metadata_key: "x-ratelimit"
+
+
+# ============================================================================
+# SECTION 9: OBSERVABILITY CONFIGURATIONS
+# Logging, metrics, and tracing setup
+# ============================================================================
+
+observability:
+  # Structured Logging
+  logging:
+    enabled: true
+    level: "info"              # debug, info, warn, error
+    output: "stderr"           # stderr, stdout, or file path
+    format: "json"             # Options: json, text
+  
+  # Prometheus Metrics
+  metrics:
+    enabled: true
+    type: "prometheus"
+    namespace: "niyantrak"
+    # Metrics collected:
+    # - niyantrak_requests_total
+    # - niyantrak_allowed_total
+    # - niyantrak_denied_total
+    # - niyantrak_decision_duration_seconds
+    # - niyantrak_requests_by_key_total (with key label)
+    # - niyantrak_allowed_by_key_total (with key label)
+    # - niyantrak_denied_by_key_total (with key label)
+  
+  # Distributed Tracing
+  tracing:
+    enabled: true
+    type: "opentelemetry"
+    exporter: "jaeger"         # jaeger, otlp, stdout
+    jaeger:
+      host: "localhost"
+      port: 6831
+
+
+# ============================================================================
+# SECTION 10: ADVANCED FEATURES
+# Dynamic limits and failover strategies
+# ============================================================================
+
+features:
+  # Dynamic Limits - Change limits at runtime
+  dynamic_limits:
+    enabled: true
+    allow_online_updates: true # Update without reload
+    graceful_switching: true   # Gradual transition to new limits
+    switching_period: "5m"     # Transition duration
+    reload_interval: "1m"      # Check for config changes
+    config_source: "file"      # file, database, api
+  
+  # Failover Strategy - Handle backend failures gracefully
+  failover:
+    enabled: true
+    strategy: "fail_open"      # Options: fail_open, fail_closed, local_fallback
+    
+    # Health checking
+    health_check_interval: "10s"
+    failure_threshold: 5       # Consecutive failures to trigger fallback
+    
+    # Recovery
+    auto_recovery: true
+    recovery_check_interval: "30s"
+    
+    # Fallback configuration
+    fallback_backend_type: "memory"
+    
+    # When FailOpen: Allow requests on backend failure
+    # When FailClosed: Deny requests on backend failure
+    # When LocalFallback: Use in-memory fallback
+
+
+# ============================================================================
+# SECTION 11: QUICK EXAMPLES
+# Ready-to-use configurations for common scenarios
+# ============================================================================
+
+scenarios:
+  # Public API with free tier
+  public_api_free_tier:
+    algorithm: token_bucket
+    token_bucket:
+      capacity: 100
+      refill_rate: 100
+      refill_period: "1m"
+    default_limit: 100
+    default_window: "1m"
+    backend:
+      type: redis
+    observability:
+      logging: { enabled: true, level: "info" }
+      metrics: { enabled: true }
+  
+  # Internal service (high limits)
+  internal_service:
+    algorithm: token_bucket
+    token_bucket:
+      capacity: 100000
+      refill_rate: 10000
+      refill_period: "1s"
+    default_limit: 100000
+    default_window: "1s"
+    backend:
+      type: memory          # Fast for internal use
+  
+  # SaaS with variable pricing
+  saas_variable_pricing:
+    algorithm: token_bucket
+    tier_based: true
+    backend:
+      type: redis
+    tiers:
+      starter:
+        limit: 10000
+        window: "1d"
+      professional:
+        limit: 100000
+        window: "1d"
+      enterprise:
+        limit: 1000000
+        window: "1d"
+    dynamic_limits:
+      enabled: true
+      allow_online_updates: true
+  
+  # High-traffic API (distributed)
+  high_traffic_distributed:
+    algorithm: gcra
+    backend:
+      type: redis
+      redis:
+        cluster: true
+    composite_limits: true
+    observability:
+      logging: { enabled: true, level: "warn" }  # Less verbose for performance
+      metrics: { enabled: true }
+      tracing: { enabled: true }
+    failover:
+      enabled: true
+      strategy: local_fallback
+
+
+# ============================================================================
+# NOTES
+# ============================================================================
+# 1. All time values support: "ns", "us", "ms", "s", "m", "h"
+#    Examples: "100ms", "5s", "1m", "2h"
+#
+# 2. Window alignment options for fixed_window:
+#    - "none": No alignment, custom window
+#    - "second": Align to second boundaries
+#    - "minute": Align to minute boundaries (most common)
+#    - "hour": Align to hour boundaries
+#    - "day": Align to day boundaries
+#
+# 3. Key extraction strategies:
+#    - "header": From HTTP header (e.g., X-API-Key)
+#    - "query": From query parameter (e.g., ?api_key=...)
+#    - "path": From URL path segment
+#    - "context": From request context
+#    - "composite": Combine multiple strategies with fallback
+#    - "metadata": From gRPC metadata (gRPC only)
+#
+# 4. Failover strategies:
+#    - "fail_open": Allow on failure (user experience prioritized)
+#    - "fail_closed": Deny on failure (security prioritized)
+#    - "local_fallback": Use in-memory fallback (balanced approach)
+#
+# 5. Backend selection:
+#    - Memory: Development, testing, single-instance (fastest)
+#    - Redis: Production distributed systems (fast + distributed)
+#    - PostgreSQL: Persistent storage, compliance, audit trail
+#
+# 6. Recommended configurations:
+#    - Development: Memory backend, Token Bucket, FailOpen
+#    - Production Single: Redis backend, Composite limits, LocalFallback
+#    - Production Multi-tenant: Redis cluster, Tenant-based, FailOpen
+#    - High Security: PostgreSQL, FailClosed, detailed logging

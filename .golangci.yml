@@ -1,0 +1,79 @@
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - bodyclose
+    - durationcheck
+    - errname
+    - errorlint
+    - exportloopref
+    - gocritic
+    - gofmt
+    - goimports
+    - misspell
+    - nilerr
+    - prealloc
+    - predeclared
+    - revive
+    - unconvert
+    - unparam
+    - whitespace
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+  govet:
+    enable-all: true
+  revive:
+    rules:
+      - name: blank-imports
+      - name: exported
+      - name: var-naming
+      - name: indent-error-flow
+      - name: range
+      - name: error-return
+      - name: error-naming
+      - name: increment-decrement
+      - name: superfluous-else
+      - name: unreachable-code
+
+issues:
+  max-issues-per-linter: 50
+  max-same-issues: 5
+  exclude-rules:
+    # Allow unchecked errors in tests
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gocritic
+    # Allow dot imports in tests (testify etc.)
+    - path: _test\.go
+      text: "dot-imports"
+    # Allow shadowing in tests
+    - path: _test\.go
+      linters:
+        - govet
+      text: "shadow"
+    # Examples can have unused parameters
+    - path: examples/
+      linters:
+        - unparam
+        - unused
+    # Mock files
+    - path: mocks/
+      linters:
+        - revive
+        - unused
