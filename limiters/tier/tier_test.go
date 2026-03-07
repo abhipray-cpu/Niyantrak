@@ -690,7 +690,7 @@ func TestClose(t *testing.T) {
 
 	// After close, operations should fail
 	result := limiter.Allow(context.Background(), "user:123")
-	if result.Error != limiters.ErrLimiterClosed {
+	if !errors.Is(result.Error, limiters.ErrLimiterClosed) {
 		t.Errorf("expected ErrLimiterClosed, got %v", result.Error)
 	}
 }

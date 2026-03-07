@@ -86,7 +86,8 @@ func Unwrap(raw []byte) (interface{}, error) {
 	var probe struct {
 		Type string `json:"_type"`
 	}
-	if err := json.Unmarshal(raw, &probe); err != nil || probe.Type == "" {
+	probeErr := json.Unmarshal(raw, &probe)
+	if probeErr != nil || probe.Type == "" {
 		// Not an envelope — return as plain value.
 		var v interface{}
 		if jsonErr := json.Unmarshal(raw, &v); jsonErr != nil {

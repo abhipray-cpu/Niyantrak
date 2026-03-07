@@ -128,7 +128,7 @@ func TestLeakyBucket_Allow_Basic(t *testing.T) {
 	assert.Equal(t, 10, bucketResult.QueueCapacity)
 
 	// Second request - should have 2 in queue
-	newState, result, err = algo.Allow(ctx, newState, 1)
+	_, result, err = algo.Allow(ctx, newState, 1)
 	require.NoError(t, err)
 
 	bucketResult, ok = result.(*LeakyBucketResult)
@@ -152,7 +152,7 @@ func TestLeakyBucket_Allow_Deny(t *testing.T) {
 	require.NoError(t, err)
 
 	// Next request should be denied
-	newState, result, err := algo.Allow(ctx, newState, 1)
+	_, result, err := algo.Allow(ctx, newState, 1)
 	require.NoError(t, err)
 
 	bucketResult, ok := result.(*LeakyBucketResult)
@@ -187,7 +187,7 @@ func TestLeakyBucket_Allow_Leak(t *testing.T) {
 		LastLeakTime: oldTime,
 	}
 
-	newState, result, err := algo.Allow(ctx, testState, 3)
+	_, result, err := algo.Allow(ctx, testState, 3)
 	require.NoError(t, err)
 
 	bucketResult := result.(*LeakyBucketResult)

@@ -425,7 +425,7 @@ func (cl *costLimiter) GetStats(ctx context.Context, key string) interface{} {
 
 	state, err := cl.backend.Get(ctx, key)
 	if err != nil {
-		if err == backend.ErrKeyNotFound {
+		if errors.Is(err, backend.ErrKeyNotFound) {
 			// Return stats for uninitialized key
 			newState, err := cl.algorithm.Reset(ctx)
 			if err != nil {

@@ -702,7 +702,7 @@ func TestClose(t *testing.T) {
 
 	// After close, operations should fail
 	result := limiter.Allow(context.Background(), "user:123")
-	if result.Error != limiters.ErrLimiterClosed {
+	if !errors.Is(result.Error, limiters.ErrLimiterClosed) {
 		t.Errorf("expected ErrLimiterClosed, got %v", result.Error)
 	}
 }
@@ -1455,7 +1455,7 @@ func TestCompositeLimit_Observability_Close(t *testing.T) {
 	}
 
 	// Verify limiter is closed
-	if err := limiter.AddLimit(context.Background(), "test", 10, time.Second); err != limiters.ErrLimiterClosed {
+	if err := limiter.AddLimit(context.Background(), "test", 10, time.Second); !errors.Is(err, limiters.ErrLimiterClosed) {
 		t.Fatal("expected ErrLimiterClosed")
 	}
 }

@@ -130,7 +130,7 @@ func TestSlidingWindow_Allow_Basic(t *testing.T) {
 	assert.Equal(t, 9, windowResult.Remaining)
 
 	// Second request
-	newState, result, err = algo.Allow(ctx, newState, 1)
+	_, result, err = algo.Allow(ctx, newState, 1)
 	require.NoError(t, err)
 
 	windowResult, ok = result.(*SlidingWindowResult)
@@ -155,7 +155,7 @@ func TestSlidingWindow_Allow_Deny(t *testing.T) {
 	require.NoError(t, err)
 
 	// Next request should be denied
-	newState, result, err := algo.Allow(ctx, newState, 1)
+	_, result, err := algo.Allow(ctx, newState, 1)
 	require.NoError(t, err)
 
 	windowResult, ok := result.(*SlidingWindowResult)
