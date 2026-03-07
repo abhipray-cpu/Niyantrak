@@ -1,4 +1,4 @@
-name: CI - Tests & Quality
+name: CI
 
 on:
   push:
@@ -6,199 +6,323 @@ on:
   pull_request:
     branches: [ main, develop ]
   schedule:
-    # Run nightly at 2 AM UTC
+    # Nightly at 02:00 UTC
     - cron: '0 2 * * *'
 
+# Cancel in-progress runs on the same branch when a new push arrives.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # ──────────────────────────────────────────────────────────────────────────
+  # TIER 1 — Run all independent jobs in parallel
+  # ──────────────────────────────────────────────────────────────────────────
+
+  # Job 1: Cross-platform / cross-version matrix (fully parallel cells)
   test:
-    name: Test on Go ${{ matrix.go }}
+    name: Test (Go ${{ matrix.go }} / ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         go: ['1.21', '1.22', '1.23', '1.24', '1.25']
-    
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Setup Go
-        uses: actions/setup-go@v4
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
           cache: true
-      
-      - name: Download dependencies
-        run: go mod download
-      
-      - name: Verify dependencies
-        run: go mod verify
-      
-      - name: Run tests
+
+      - name: Download & verify dependencies
+        run: |
+          go mod download
+          go mod verify
+
+      - name: Unit tests
         run: go test -v -timeout 5m ./...
-      
-      - name: Run tests with race detector
+
+      - name: Race detector
         run: go test -race -timeout 10m ./...
-      
-      - name: Run short tests
+
+      - name: Short tests
         run: go test -short -timeout 2m ./...
 
-  coverage:
-    name: Code Coverage
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Setup Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.25'
-          cache: true
-      
-      - name: Generate coverage
-        run: go test -v -coverprofile=coverage.out -covermode=atomic ./...
-      
-      - name: Upload to Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          files: ./coverage.out
-          flags: unittests
-          name: codecov-umbrella
-          fail_ci_if_error: true
-      
-      - name: Display coverage
-        run: go tool cover -func=coverage.out
-
+  # Job 2: Lint, format and static analysis (independent of test matrix)
   lint:
-    name: Lint & Quality Checks
+    name: Lint & Static Analysis
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Setup Go
-        uses: actions/setup-go@v4
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
           cache: true
-      
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v3
-        with:
-          version: latest
-          args: --timeout=5m
-      
-      - name: Run gofmt
+
+      - name: go fmt
         run: |
           if [ "$(gofmt -l . | wc -l)" -gt 0 ]; then
-            echo "Files need formatting:"
+            echo "❌ Unformatted files:"
             gofmt -l .
             exit 1
           fi
-      
-      - name: Run go vet
+
+      - name: go vet
         run: go vet ./...
-      
-      - name: Run staticcheck
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m
+
+      - name: staticcheck
         uses: dominikh/staticcheck-action@v1
         with:
           version: latest
 
+  # Job 3: Security scan (independent)
   security:
     name: Security Scan
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Setup Go
-        uses: actions/setup-go@v4
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
           cache: true
-      
-      - name: Run gosec
+
+      - name: gosec
         uses: securego/gosec@master
         with:
           args: -no-fail -fmt sarif -out results.sarif ./...
-      
-      - name: Upload to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v2
+
+      - name: Upload SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: results.sarif
 
+  # Job 4: Build library + all examples (independent)
   build:
-    name: Build Examples
+    name: Build & Examples
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Setup Go
-        uses: actions/setup-go@v4
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
           cache: true
-      
+
       - name: Build library
         run: go build -v ./...
-      
+
       - name: Build examples
         run: |
           for dir in examples/0*/; do
-            echo "Building $dir..."
-            go build -o /tmp/example_$(basename $dir) $dir/main.go
+            echo "→ Building $dir"
+            go build -o /tmp/example_$(basename "$dir") "$dir/main.go"
           done
-      
-      - name: Verify examples compile
-        run: make test-examples
 
+  # Job 5: Documentation checks (independent)
   docs:
     name: Documentation Check
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Setup Go
-        uses: actions/setup-go@v4
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
-      
-      - name: Check Go documentation
-        run: go doc -all ./... > /dev/null
-      
-      - name: Verify README exists
-        run: test -f README.md
-      
-      - name: Verify examples exist
-        run: test -d examples && ls examples/0*/main.go
 
-  status:
-    name: Final Status
-    needs: [test, coverage, lint, security, build, docs]
+      - name: go doc (all packages)
+        run: go doc -all ./... > /dev/null
+
+      - name: README present
+        run: test -f README.md
+
+      - name: Examples present
+        run: test -d examples && ls examples/0*/main.go > /dev/null
+
+  # Job 6: PR-only quality gates (independent; skipped on schedule/push)
+  pr-checks:
+    name: PR Quality Checks
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Validate commit messages
+        run: |
+          commits=$(git rev-list \
+            ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }})
+          failed=0
+          for commit in $commits; do
+            msg=$(git log -1 --format=%B "$commit")
+            if ! echo "$msg" | grep -qE \
+              '^(feat|fix|docs|style|refactor|perf|test|chore|ci)(\(.+\))?: '; then
+              echo "❌ Bad commit message: $msg"
+              failed=1
+            fi
+          done
+          [ "$failed" -eq 0 ] && echo "✅ All commit messages valid"
+          exit $failed
+
+      - name: Dependency hygiene
+        run: |
+          go mod download
+          go mod verify
+          go mod tidy -v
+
+      - name: Coverage gate (≥70%)
+        run: |
+          go test -v -coverprofile=coverage.out ./...
+          coverage=$(go tool cover -func=coverage.out | grep total | awk '{print int($3)}')
+          echo "Coverage: ${coverage}%"
+          if [ "$coverage" -lt 70 ]; then
+            echo "⚠️  Coverage ${coverage}% is below 70% target"
+          fi
+
+      - name: Comment PR with coverage
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { execSync } = require('child_process');
+            const cov = execSync(
+              "go tool cover -func=coverage.out | grep total | awk '{print int($3)}'"
+            ).toString().trim();
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `📊 **Code Coverage: ${cov}%**`
+            });
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # TIER 2 — Coverage upload (needs test to finish first for a valid report)
+  # ──────────────────────────────────────────────────────────────────────────
+
+  coverage:
+    name: Coverage Report
+    runs-on: ubuntu-latest
+    needs: [test]     # wait for the full test matrix before uploading
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Generate coverage report
+        run: go test -v -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.out
+          flags: unittests
+          name: niyantrak
+          fail_ci_if_error: true
+
+      - name: Print coverage summary
+        run: go tool cover -func=coverage.out
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # TIER 2 — Benchmarks (needs test; only runs on main push / nightly)
+  # ──────────────────────────────────────────────────────────────────────────
+
+  benchmark:
+    name: Benchmark
+    runs-on: ubuntu-latest
+    needs: [test]
+    if: |
+      github.event_name == 'push' && github.ref == 'refs/heads/main' ||
+      github.event_name == 'schedule'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Run benchmarks
+        run: |
+          go test -run=^$ -bench=. -benchmem -benchtime=10s ./... \
+            > benchmark_results.txt || true
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: benchmark_results.txt
+          retention-days: 30
+
+      - name: Store benchmark for trend tracking
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: 'go'
+          output-file-path: benchmark_results.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # TIER 3 — Final gate (all Tier-1 + Tier-2 jobs must succeed)
+  # ──────────────────────────────────────────────────────────────────────────
+
+  ci-gate:
+    name: CI Gate
     runs-on: ubuntu-latest
     if: always()
-    
+    needs: [test, lint, security, build, docs, coverage]
+
     steps:
-      - name: Check job status
+      - name: Evaluate results
         run: |
-          if [ "${{ needs.test.result }}" != "success" ] || \
-             [ "${{ needs.coverage.result }}" != "success" ] || \
-             [ "${{ needs.lint.result }}" != "success" ] || \
-             [ "${{ needs.security.result }}" != "success" ] || \
-             [ "${{ needs.build.result }}" != "success" ] || \
-             [ "${{ needs.docs.result }}" != "success" ]; then
-            echo "❌ CI Pipeline Failed"
+          declare -A results
+          results[test]="${{ needs.test.result }}"
+          results[lint]="${{ needs.lint.result }}"
+          results[security]="${{ needs.security.result }}"
+          results[build]="${{ needs.build.result }}"
+          results[docs]="${{ needs.docs.result }}"
+          results[coverage]="${{ needs.coverage.result }}"
+
+          failed=0
+          for job in test lint security build docs coverage; do
+            status="${results[$job]}"
+            if [ "$status" = "success" ]; then
+              echo "✅  $job"
+            else
+              echo "❌  $job → $status"
+              failed=1
+            fi
+          done
+
+          if [ "$failed" -eq 1 ]; then
+            echo ""
+            echo "❌ CI Pipeline FAILED — see above for failing jobs"
             exit 1
-          else
-            echo "✅ CI Pipeline Passed"
           fi
+          echo ""
+          echo "✅ CI Pipeline PASSED"

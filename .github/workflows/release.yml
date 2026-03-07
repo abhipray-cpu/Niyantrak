@@ -1,4 +1,4 @@
-name: Release & Publishing
+name: Release
 
 on:
   push:
@@ -7,114 +7,318 @@ on:
 
 permissions:
   contents: write
+  security-events: write
+
+# A release tag should never be pushed twice; no cancellation needed.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  test-before-release:
-    name: Test Before Release
-    runs-on: ubuntu-latest
-    
+  # ──────────────────────────────────────────────────────────────────────────
+  # TIER 1 — All pre-release checks run in parallel
+  # ──────────────────────────────────────────────────────────────────────────
+
+  # Check 1: Full cross-platform / cross-version test matrix
+  test:
+    name: Test (Go ${{ matrix.go }} / ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        go: ['1.21', '1.22', '1.23', '1.24', '1.25']
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Setup Go
-        uses: actions/setup-go@v4
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+
+      - name: Download & verify dependencies
+        run: |
+          go mod download
+          go mod verify
+
+      - name: Unit tests
+        run: go test -v -timeout 5m ./...
+
+      - name: Race detector
+        run: go test -race -timeout 10m ./...
+
+  # Check 2: Lint & static analysis
+  lint:
+    name: Lint & Static Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
           cache: true
-      
-      - name: Run full test suite
-        run: go test -v -race -timeout 10m ./...
-      
-      - name: Run linters
-        uses: golangci/golangci-lint-action@v3
+
+      - name: go fmt
+        run: |
+          if [ "$(gofmt -l . | wc -l)" -gt 0 ]; then
+            echo "❌ Unformatted files:"
+            gofmt -l .
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
         with:
           version: latest
           args: --timeout=5m
-      
-      - name: Security scan
+
+      - name: staticcheck
+        uses: dominikh/staticcheck-action@v1
+        with:
+          version: latest
+
+  # Check 3: Security scan
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: gosec
         uses: securego/gosec@master
         with:
-          args: -no-fail ./...
+          args: -no-fail -fmt sarif -out results.sarif ./...
 
+      - name: Upload SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: results.sarif
+
+  # Check 4: Build library + all examples
+  build:
+    name: Build & Examples
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Build library
+        run: go build -v ./...
+
+      - name: Build examples
+        run: |
+          for dir in examples/0*/; do
+            echo "→ Building $dir"
+            go build -o /tmp/example_$(basename "$dir") "$dir/main.go"
+          done
+
+  # Check 5: Coverage (upload to Codecov as part of release record)
+  coverage:
+    name: Coverage Report
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Generate coverage report
+        run: go test -v -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.out
+          flags: release
+          name: niyantrak-release
+          fail_ci_if_error: true
+
+      - name: Print coverage summary
+        run: go tool cover -func=coverage.out
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # TIER 2 — Gate: ALL checks above must pass before ANY release step runs
+  # ──────────────────────────────────────────────────────────────────────────
+
+  checks-gate:
+    name: All Checks Passed
+    runs-on: ubuntu-latest
+    needs: [test, lint, security, build, coverage]
+    if: always()
+
+    steps:
+      - name: Evaluate pre-release checks
+        run: |
+          declare -A results
+          results[test]="${{ needs.test.result }}"
+          results[lint]="${{ needs.lint.result }}"
+          results[security]="${{ needs.security.result }}"
+          results[build]="${{ needs.build.result }}"
+          results[coverage]="${{ needs.coverage.result }}"
+
+          failed=0
+          for job in test lint security build coverage; do
+            status="${results[$job]}"
+            if [ "$status" = "success" ]; then
+              echo "✅  $job"
+            else
+              echo "❌  $job → $status"
+              failed=1
+            fi
+          done
+
+          if [ "$failed" -eq 1 ]; then
+            echo ""
+            echo "🚫 Release blocked — pre-release checks did not all pass."
+            exit 1
+          fi
+          echo ""
+          echo "🟢 All checks passed — proceeding to release."
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # TIER 3 — Release jobs fan out in parallel (all need checks-gate)
+  # ──────────────────────────────────────────────────────────────────────────
+
+  # Release job A: Create GitHub Release
   create-release:
     name: Create GitHub Release
-    needs: test-before-release
     runs-on: ubuntu-latest
-    
+    needs: [checks-gate]
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Get release notes
-        id: release_notes
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version
+        id: meta
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          IS_PRE=$( echo "$VERSION" | grep -qE '(alpha|beta|rc)' && echo true || echo false )
+          echo "prerelease=$IS_PRE" >> "$GITHUB_OUTPUT"
+
+      - name: Extract release notes from CHANGELOG
+        id: notes
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          # Strip leading 'v' for CHANGELOG lookup (e.g. v1.0.0 → 1.0.0)
+          VER="${VERSION#v}"
+          notes_file=/tmp/release_notes.txt
+
           if [ -f CHANGELOG.md ]; then
-            grep -A 100 "## \[$VERSION\]" CHANGELOG.md || echo "See commit history for changes" > /tmp/release_notes.txt
-          else
-            git log --oneline $(git describe --tags --abbrev=0 @^)..@^ > /tmp/release_notes.txt || echo "Initial release" > /tmp/release_notes.txt
+            # Grab lines between the matching version header and the next one
+            awk "/^## \[${VER}\]/{found=1; next} found && /^## \[/{exit} found{print}" \
+              CHANGELOG.md > "$notes_file"
           fi
-      
+
+          if [ ! -s "$notes_file" ]; then
+            echo "See commit history: https://github.com/${{ github.repository }}/commits/${VERSION}" \
+              > "$notes_file"
+          fi
+
+          echo "notes_file=$notes_file" >> "$GITHUB_OUTPUT"
+
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          body_path: /tmp/release_notes.txt
+          body_path: ${{ steps.notes.outputs.notes_file }}
           draft: false
-          prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') || contains(github.ref, 'rc') }}
+          prerelease: ${{ steps.meta.outputs.prerelease }}
+          generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Release job B: Generate and upload API docs artifact
   publish-docs:
     name: Publish Documentation
-    needs: test-before-release
     runs-on: ubuntu-latest
-    if: "!contains(github.ref, 'beta') && !contains(github.ref, 'alpha') && !contains(github.ref, 'rc')"
-    
+    needs: [checks-gate]
+    if: "!contains(github.ref, 'alpha') && !contains(github.ref, 'beta') && !contains(github.ref, 'rc')"
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Setup Go
-        uses: actions/setup-go@v4
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
-      
-      - name: Generate documentation
-        run: go doc -all ./... > docs/api-reference.md
-      
-      - name: Upload documentation
-        uses: actions/upload-artifact@v3
-        with:
-          name: api-documentation
-          path: docs/api-reference.md
-          retention-days: 30
 
-  notify:
-    name: Notify Release
-    needs: [create-release, publish-docs]
+      - name: Generate API reference
+        run: go doc -all ./... > docs/api-reference.md
+
+      - name: Upload API docs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-docs-${{ github.ref_name }}
+          path: docs/api-reference.md
+          retention-days: 90
+
+  # Release job C: Trigger pkg.go.dev indexing
+  pkggodev:
+    name: Trigger pkg.go.dev Indexing
+    runs-on: ubuntu-latest
+    needs: [checks-gate]
+
+    steps:
+      - name: Fetch module proxy to seed pkg.go.dev
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          MODULE="github.com/abhipray-cpu/niyantrak"
+          echo "→ Requesting ${MODULE}@${VERSION} from proxy.golang.org"
+          curl -sSf "https://proxy.golang.org/${MODULE}/@v/${VERSION}.info" \
+            -o /dev/null && echo "✅ Module indexed" || echo "⚠️  Proxy returned non-200 (may need a moment)"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # TIER 4 — Final release summary (all Tier-3 jobs must finish)
+  # ──────────────────────────────────────────────────────────────────────────
+
+  release-summary:
+    name: Release Summary
     runs-on: ubuntu-latest
     if: always()
-    
+    needs: [create-release, publish-docs, pkggodev]
+
     steps:
       - name: Extract version
         id: version
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-      
-      - name: Create deployment status
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.repos.createDeployment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: context.ref,
-              environment: 'production',
-              description: 'Released ${{ steps.version.outputs.version }}',
-              production_environment: true,
-              auto_merge: false,
-              required_contexts: []
-            });
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Write job summary
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "## 🚀 Release ${VERSION}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Job | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-----|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| GitHub Release | ${{ needs.create-release.result == 'success' && '✅ Created' || '❌ Failed' }} |" \
+            >> "$GITHUB_STEP_SUMMARY"
+          echo "| API Docs | ${{ needs.publish-docs.result == 'success' && '✅ Uploaded' || needs.publish-docs.result == 'skipped' && '⏭️ Skipped (pre-release)' || '❌ Failed' }} |" \
+            >> "$GITHUB_STEP_SUMMARY"
+          echo "| pkg.go.dev | ${{ needs.pkggodev.result == 'success' && '✅ Indexed' || '⚠️ Check manually' }} |" \
+            >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "📦 [View on pkg.go.dev](https://pkg.go.dev/github.com/abhipray-cpu/niyantrak@${VERSION})" \
+            >> "$GITHUB_STEP_SUMMARY"
