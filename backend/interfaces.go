@@ -78,10 +78,10 @@ func AtomicUpdate(ctx context.Context, b Backend, key string, ttl time.Duration,
 
 	// Fallback: non-atomic Get → fn → Set
 	state, err := b.Get(ctx, key)
-	if err != nil && err != ErrKeyNotFound {
+	if err != nil && !errors.Is(err, ErrKeyNotFound) {
 		return nil, err
 	}
-	if err == ErrKeyNotFound {
+	if errors.Is(err, ErrKeyNotFound) {
 		state = nil
 	}
 

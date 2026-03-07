@@ -469,7 +469,7 @@ func TestGetRemainingBudget(t *testing.T) {
 	assert.Equal(t, 100, budget)
 
 	// Invalid key
-	budget, err = limiter.GetRemainingBudget(ctx, "")
+	_, err = limiter.GetRemainingBudget(ctx, "")
 	assert.Error(t, err)
 	assert.Equal(t, limiters.ErrInvalidKey, err)
 }
@@ -659,7 +659,7 @@ func TestConcurrentAccess(t *testing.T) {
 	wg.Add(concurrency)
 
 	for i := 0; i < concurrency; i++ {
-		go func(id int) {
+		go func(_ int) {
 			defer wg.Done()
 			for j := 0; j < 10; j++ {
 				limiter.Allow(ctx, key)

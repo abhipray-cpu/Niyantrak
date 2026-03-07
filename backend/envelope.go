@@ -89,7 +89,8 @@ func Unwrap(raw []byte) (interface{}, error) {
 	if err := json.Unmarshal(raw, &probe); err != nil || probe.Type == "" {
 		// Not an envelope — return as plain value.
 		var v interface{}
-		if err := json.Unmarshal(raw, &v); err != nil {
+		if jsonErr := json.Unmarshal(raw, &v); jsonErr != nil {
+			// Not valid JSON either — return the raw bytes as a string.
 			return string(raw), nil
 		}
 		return v, nil

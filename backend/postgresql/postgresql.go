@@ -3,13 +3,14 @@ package postgresql
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"regexp"
 	"sync"
 	"time"
 
 	"github.com/abhipray-cpu/niyantrak/backend"
-	_ "github.com/lib/pq"
+	_ "github.com/lib/pq" // register the postgres driver with database/sql
 )
 
 // postgresqlBackend is a PostgreSQL-based persistent storage backend
@@ -135,7 +136,7 @@ func (p *postgresqlBackend) Get(ctx context.Context, key string) (interface{}, e
 	var expiresAt sql.NullTime
 
 	err := p.db.QueryRowContext(ctx, query, key).Scan(&value, &expiresAt)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, backend.ErrKeyNotFound
 	}
 	if err != nil {
@@ -222,7 +223,7 @@ func (p *postgresqlBackend) IncrementAndGet(ctx context.Context, key string, ttl
 	query := fmt.Sprintf(`SELECT value, expires_at FROM %s WHERE key = $1`, tableName)
 	err := p.db.QueryRowContext(ctx, query, key).Scan(&currentValue, &currentExpiresAt)
 
-	if err == sql.ErrNoRows || (currentExpiresAt.Valid && time.Now().After(currentExpiresAt.Time)) {
+	if errors.Is(err, sql.ErrNoRows) || (currentExpiresAt.Valid && time.Now().After(currentExpiresAt.Time)) {
 		// Key doesn't exist or expired, start from 0
 		insertQuery := fmt.Sprintf(`
 			INSERT INTO %s (key, value, expires_at, updated_at)
@@ -293,7 +294,7 @@ func (p *postgresqlBackend) Update(ctx context.Context, key string, ttl time.Dur
 	if err != nil {
 		return nil, fmt.Errorf("postgresql: begin tx: %w", err)
 	}
-	defer tx.Rollback() //nolint:errcheck
+	defer tx.Rollback() //nolint:errcheck // rollback is a no-op after Commit; error intentionally ignored
 
 	// --- read with row-level lock ---
 	selectQ := fmt.Sprintf(`SELECT value, expires_at FROM %s WHERE key = $1 FOR UPDATE`, tableName)
@@ -537,7 +538,7 @@ func (p *postgresqlBackend) Transaction(ctx context.Context, fn func(backend.Bac
 	// Execute the function
 	err = fn(txBackend)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return err
 	}
 

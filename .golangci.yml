@@ -14,7 +14,6 @@ linters:
     - durationcheck
     - errname
     - errorlint
-    - exportloopref
     - gocritic
     - gofmt
     - goimports
@@ -35,8 +34,14 @@ linters-settings:
       - diagnostic
       - style
       - performance
+    disabled-checks:
+      - hugeParam          # structs passed by value: valid Go style for config types
+      - unnamedResult      # unnamed interface returns are idiomatic for algorithm.Allow
+      - paramTypeCombine   # minor style; would change public API signatures
   govet:
     enable-all: true
+    disable:
+      - fieldalignment     # struct padding: cosmetic; fixing would shuffle every struct
   revive:
     rules:
       - name: blank-imports
@@ -77,3 +82,7 @@ issues:
       linters:
         - revive
         - unused
+    # Stutter names are part of the stable v1.0.0 public API; renaming would be breaking
+    - linters:
+        - revive
+      text: "stutters"

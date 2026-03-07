@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/abhipray-cpu/niyantrak/limiters"
 	"github.com/abhipray-cpu/niyantrak/middleware"
@@ -175,7 +174,7 @@ func (g *grpcMiddleware) sendMetadata(stream grpc.ServerStream, result *limiters
 		md.Append("retry-after", fmt.Sprintf("%.0f", result.RetryAfter.Seconds()))
 	}
 
-	stream.SendHeader(md)
+	stream.SendHeader(md) //nolint:errcheck // best-effort header send; error intentionally ignored
 }
 
 // createLimitExceededError creates a gRPC error for rate limit exceeded,
@@ -201,7 +200,7 @@ func (g *grpcMiddleware) createLimitExceededError(result *limiters.LimitResult, 
 	// Build structured error details.
 	retryInfo := &errdetails.RetryInfo{}
 	if result.RetryAfter > 0 {
-		retryInfo.RetryDelay = durationpb.New(time.Duration(result.RetryAfter))
+		retryInfo.RetryDelay = durationpb.New(result.RetryAfter)
 	}
 
 	quotaFailure := &errdetails.QuotaFailure{

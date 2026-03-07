@@ -146,7 +146,7 @@ jobs:
           go-version: '1.25'
 
       - name: go doc (all packages)
-        run: go doc -all ./... > /dev/null
+        run: go list ./... | xargs -I{} go doc -all {} > /dev/null
 
       - name: README present
         run: test -f README.md

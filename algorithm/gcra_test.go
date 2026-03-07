@@ -119,7 +119,7 @@ func TestGCRA_Allow_Basic(t *testing.T) {
 	assert.Equal(t, 100*time.Millisecond, gcraResult.Limit)
 
 	// Second request immediately - should be allowed (burst)
-	newState, result, err = algo.Allow(ctx, newState, 1)
+	_, result, err = algo.Allow(ctx, newState, 1)
 	require.NoError(t, err)
 
 	gcraResult, ok = result.(*GCRAResult)
@@ -466,7 +466,7 @@ func TestGCRA_MultipleWaits(t *testing.T) {
 
 	// Wait and try again
 	time.Sleep(60 * time.Millisecond)
-	state, result2, err := algo.Allow(ctx, state, 1)
+	_, result2, err := algo.Allow(ctx, state, 1)
 	require.NoError(t, err)
 	assert.True(t, result2.(*GCRAResult).Allowed)
 }

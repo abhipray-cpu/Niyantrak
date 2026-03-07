@@ -399,7 +399,7 @@ func TestSetTenantLimit(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	limit, window, err = limiter.GetTenantLimit(context.Background(), "tenant-d")
+	limit, _, err = limiter.GetTenantLimit(context.Background(), "tenant-d")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -840,7 +840,7 @@ func TestConcurrentAccess(t *testing.T) {
 	done := make(chan bool, numGoroutines)
 
 	for g := 0; g < numGoroutines; g++ {
-		go func(id int) {
+		go func(_ int) {
 			for r := 0; r < requestsPerGoroutine; r++ {
 				limiter.Allow(context.Background(), "user:123")
 				limiter.SetTenantLimit(context.Background(), "tenant-a", 50, 2*time.Minute)

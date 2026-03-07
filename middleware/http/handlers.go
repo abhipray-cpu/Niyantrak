@@ -25,7 +25,7 @@ func (h *defaultRateLimitHandler) HandleExceeded(w http.ResponseWriter, r *http.
 		"message": "Too many requests. Please try again later.",
 	}
 
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // HandleError handles errors during rate limiting
@@ -38,5 +38,5 @@ func (h *defaultRateLimitHandler) HandleError(w http.ResponseWriter, r *http.Req
 		"message": err.Error(),
 	}
 
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }

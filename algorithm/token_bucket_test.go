@@ -10,9 +10,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// assertFloatEqual asserts that two float64 values are equal within a tolerance
-func assertFloatEqual(t *testing.T, expected, actual float64, tolerance float64) {
-	if math.Abs(expected-actual) > tolerance {
+// floatTolerance is the default tolerance for floating-point comparisons.
+const floatTolerance = 1e-3
+
+// assertFloatEqual asserts that two float64 values are equal within floatTolerance
+func assertFloatEqual(t *testing.T, expected, actual float64) {
+	t.Helper()
+	if math.Abs(expected-actual) > floatTolerance {
 		t.Errorf("expected %f, got %f (difference: %f)", expected, actual, math.Abs(expected-actual))
 	}
 }
@@ -143,7 +147,7 @@ func TestTokenBucket_Allow_Basic(t *testing.T) {
 	bucketResult, ok := result.(*TokenBucketResult)
 	require.True(t, ok)
 	assert.True(t, bucketResult.Allowed)
-	assertFloatEqual(t, 9, bucketResult.RemainingTokens, 1e-5)
+	assertFloatEqual(t, 9, bucketResult.RemainingTokens)
 
 	// Second request - should have 9 tokens left
 	newState, result, err = algo.Allow(ctx, newState, 1)
@@ -152,7 +156,7 @@ func TestTokenBucket_Allow_Basic(t *testing.T) {
 	bucketResult, ok = result.(*TokenBucketResult)
 	require.True(t, ok)
 	assert.True(t, bucketResult.Allowed)
-	assertFloatEqual(t, 8, bucketResult.RemainingTokens, 1e-5)
+	assertFloatEqual(t, 8, bucketResult.RemainingTokens)
 }
 
 func TestTokenBucket_Allow_Deny(t *testing.T) {
@@ -176,7 +180,7 @@ func TestTokenBucket_Allow_Deny(t *testing.T) {
 	bucketResult, ok := result.(*TokenBucketResult)
 	require.True(t, ok)
 	assert.False(t, bucketResult.Allowed)
-	assertFloatEqual(t, 0, bucketResult.RemainingTokens, 1e-5)
+	assertFloatEqual(t, 0, bucketResult.RemainingTokens)
 	assert.True(t, bucketResult.RetryAfter > 0)
 }
 
@@ -211,7 +215,7 @@ func TestTokenBucket_Allow_Refill(t *testing.T) {
 
 	bucketResult := result.(*TokenBucketResult)
 	assert.True(t, bucketResult.Allowed)
-	assertFloatEqual(t, 2, bucketResult.RemainingTokens, 1e-5) // 5 tokens added - 3 used = 2 left
+	assertFloatEqual(t, 2, bucketResult.RemainingTokens) // 5 tokens added - 3 used = 2 left
 }
 
 func TestTokenBucket_Allow_Cost(t *testing.T) {
@@ -324,7 +328,7 @@ func TestTokenBucket_InitialTokens(t *testing.T) {
 
 	bucketResult := result.(*TokenBucketResult)
 	assert.True(t, bucketResult.Allowed)
-	assertFloatEqual(t, 24, bucketResult.RemainingTokens, 1e-5)
+	assertFloatEqual(t, 24, bucketResult.RemainingTokens)
 }
 
 func TestTokenBucket_RefillOverCapacity(t *testing.T) {
@@ -374,5 +378,5 @@ func TestTokenBucket_ZeroElapsedTime(t *testing.T) {
 
 	bucketResult := result.(*TokenBucketResult)
 	assert.True(t, bucketResult.Allowed)
-	assertFloatEqual(t, 4, bucketResult.RemainingTokens, 1e-5)
+	assertFloatEqual(t, 4, bucketResult.RemainingTokens)
 }

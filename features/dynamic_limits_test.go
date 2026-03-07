@@ -247,6 +247,9 @@ func TestDynamicLimitManager_UpdateLimit_Overwrite(t *testing.T) {
 	}
 
 	limit, window, err := manager.GetCurrentLimit(ctx, "key1")
+	if err != nil {
+		t.Fatalf("GetCurrentLimit failed: %v", err)
+	}
 	if limit != 500 || window != 5*time.Minute {
 		t.Errorf("expected limit=500, window=5m; got limit=%d, window=%v", limit, window)
 	}

@@ -752,7 +752,7 @@ func TestConcurrentAccess(t *testing.T) {
 	done := make(chan bool, numGoroutines)
 
 	for g := 0; g < numGoroutines; g++ {
-		go func(id int) {
+		go func(_ int) {
 			for r := 0; r < requestsPerGoroutine; r++ {
 				limiter.Allow(context.Background(), "user:123")
 				limiter.GetLimits(context.Background())

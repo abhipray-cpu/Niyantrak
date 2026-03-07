@@ -3,6 +3,7 @@ package composite
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -90,9 +91,6 @@ func NewCompositeLimiter(algo algorithm.Algorithm, be backend.Backend, cfg limit
 			createdAt:      time.Now(),
 		}
 
-		if seenPriorities[lc.Priority] {
-			// Warn but don't fail - multiple limits can have same priority
-		}
 		seenPriorities[lc.Priority] = true
 	}
 
@@ -413,7 +411,7 @@ func (cl *compositeLimiter) CheckAll(ctx context.Context, key string) ([]limiter
 	for _, ld := range limits {
 		compositeKey := fmt.Sprintf("%s:%s", key, ld.name)
 		state, err := ld.backendBackend.Get(ctx, compositeKey)
-		if err != nil && err != backend.ErrKeyNotFound {
+		if err != nil && !errors.Is(err, backend.ErrKeyNotFound) {
 			cl.logger.Error("failed to get state in CheckAll", "limit", ld.name, "error", err)
 			return nil, err
 		}
@@ -528,7 +526,7 @@ func (cl *compositeLimiter) GetStats(ctx context.Context, key string) interface{
 	for _, ld := range limits {
 		compositeKey := fmt.Sprintf("%s:%s", key, ld.name)
 		state, err := ld.backendBackend.Get(ctx, compositeKey)
-		if err != nil && err != backend.ErrKeyNotFound {
+		if err != nil && !errors.Is(err, backend.ErrKeyNotFound) {
 			limitStats[ld.name] = map[string]interface{}{"error": err.Error()}
 			continue
 		}

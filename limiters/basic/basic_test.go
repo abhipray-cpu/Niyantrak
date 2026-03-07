@@ -623,7 +623,7 @@ func TestConcurrentAccess(t *testing.T) {
 	wg.Add(concurrency)
 
 	for i := 0; i < concurrency; i++ {
-		go func(id int) {
+		go func(_ int) {
 			defer wg.Done()
 
 			// Each goroutine makes multiple requests

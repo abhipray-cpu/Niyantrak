@@ -397,7 +397,7 @@ func TestSetTierLimit(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	limit, window, err = limiter.GetTierLimit(context.Background(), "premium")
+	limit, _, err = limiter.GetTierLimit(context.Background(), "premium")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -792,7 +792,7 @@ func TestConcurrentAccess(t *testing.T) {
 	done := make(chan bool, numGoroutines)
 
 	for g := 0; g < numGoroutines; g++ {
-		go func(id int) {
+		go func(_ int) {
 			for r := 0; r < requestsPerGoroutine; r++ {
 				limiter.Allow(context.Background(), "user:123")
 				limiter.SetTierLimit(context.Background(), "free", 50, 2*time.Minute)

@@ -121,7 +121,7 @@ func handleChiRateLimitExceeded(w http.ResponseWriter, r *http.Request, result *
 	// Default handler
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusTooManyRequests)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"error":   "rate limit exceeded",
 		"message": fmt.Sprintf("Too many requests. Limit: %d requests", result.Limit),
 	})
@@ -140,7 +140,7 @@ func handleChiError(w http.ResponseWriter, r *http.Request, err error, options C
 	if options.AbortOnError {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"error":   "rate limit error",
 			"message": err.Error(),
 		})

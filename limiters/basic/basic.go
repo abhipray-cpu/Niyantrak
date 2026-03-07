@@ -2,6 +2,7 @@ package basic
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -318,7 +319,7 @@ func (bl *basicLimiter) GetStats(ctx context.Context, key string) interface{} {
 
 	state, err := bl.backend.Get(ctx, key)
 	if err != nil {
-		if err == backend.ErrKeyNotFound {
+		if errors.Is(err, backend.ErrKeyNotFound) {
 			// Return stats for uninitialized key
 			newState, err := bl.algorithm.Reset(ctx)
 			if err != nil {

@@ -231,11 +231,6 @@ func (sw *slidingWindow) Allow(ctx context.Context, state interface{}, cost int)
 	}
 
 	// Deny the request
-	remaining := sw.config.Limit - currentEstimate
-	if remaining < 0 {
-		remaining = 0
-	}
-
 	retryAfter := sw.calculateRetryAfter(windowState, cost, now)
 
 	result := SlidingWindowResult{

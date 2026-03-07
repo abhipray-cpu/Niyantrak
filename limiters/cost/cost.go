@@ -2,6 +2,7 @@ package cost
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -345,7 +346,7 @@ func (cl *costLimiter) GetRemainingBudget(ctx context.Context, key string) (int,
 
 	_, err := cl.backend.Get(ctx, key)
 	if err != nil {
-		if err == backend.ErrKeyNotFound {
+		if errors.Is(err, backend.ErrKeyNotFound) {
 			// Uninitialized key has full budget
 			return cl.config.DefaultLimit, nil
 		}

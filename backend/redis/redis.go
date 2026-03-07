@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -146,7 +147,7 @@ func (r *redisBackend) prefixedKey(key string) string {
 func (r *redisBackend) Get(ctx context.Context, key string) (interface{}, error) {
 	data, err := r.client.Get(ctx, r.prefixedKey(key)).Bytes()
 	if err != nil {
-		if err == goredis.Nil {
+		if errors.Is(err, goredis.Nil) {
 			return nil, backend.ErrKeyNotFound
 		}
 		return nil, err
@@ -177,14 +178,14 @@ func (r *redisBackend) Update(ctx context.Context, key string, ttl time.Duration
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		// 1. Read current value
 		oldBytes, err := r.client.Get(ctx, pk).Bytes()
-		if err != nil && err != goredis.Nil {
+		if err != nil && !errors.Is(err, goredis.Nil) {
 			return nil, err
 		}
 
 		// Deserialise current state
 		var current interface{}
 		oldStr := ""
-		if err != goredis.Nil {
+		if !errors.Is(err, goredis.Nil) {
 			oldStr = string(oldBytes)
 			current, err = backend.Unwrap(oldBytes)
 			if err != nil {

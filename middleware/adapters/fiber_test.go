@@ -35,6 +35,7 @@ func TestFiberRateLimiter_Basic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
 		t.Errorf("expected status 200, got %d", resp.StatusCode)
@@ -72,6 +73,7 @@ func TestFiberRateLimiter_Denied(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != 429 {
 		t.Errorf("expected status 429, got %d", resp.StatusCode)
@@ -100,6 +102,7 @@ func TestFiberRateLimiter_DefaultKeyExtractor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
 		t.Errorf("expected status 200, got %d", resp.StatusCode)
@@ -136,6 +139,7 @@ func TestFiberRateLimiter_SkipPaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
 		t.Errorf("/health: expected status 200, got %d", resp.StatusCode)
@@ -147,6 +151,7 @@ func TestFiberRateLimiter_SkipPaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != 429 {
 		t.Errorf("/api: expected status 429, got %d", resp.StatusCode)
@@ -183,6 +188,7 @@ func TestFiberRateLimiter_CustomErrorHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer resp.Body.Close()
 
 	if !customHandlerCalled {
 		t.Error("custom handler should have been called")
@@ -220,6 +226,7 @@ func TestFiberRateLimiter_HeadersDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
 		t.Errorf("expected status 200, got %d", resp.StatusCode)

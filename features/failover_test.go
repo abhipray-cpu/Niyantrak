@@ -87,13 +87,6 @@ func (m *mockBackend) setShouldFailSet(v bool) {
 	m.mu.Unlock()
 }
 
-// setShouldFailGet safely sets the shouldFailGet flag.
-func (m *mockBackend) setShouldFailGet(v bool) {
-	m.mu.Lock()
-	m.shouldFailGet = v
-	m.mu.Unlock()
-}
-
 func (m *mockBackend) Get(ctx context.Context, key string) (interface{}, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
