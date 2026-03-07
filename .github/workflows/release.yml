@@ -265,7 +265,19 @@ jobs:
           go-version: '1.25'
 
       - name: Generate API reference
-        run: go doc -all ./... > docs/api-reference.md
+        run: |
+          mkdir -p docs
+          echo "# Niyantrak API Reference" > docs/api-reference.md
+          echo "" >> docs/api-reference.md
+          echo "Generated from \`go doc\` on \`${GITHUB_REF_NAME}\`" >> docs/api-reference.md
+          echo "" >> docs/api-reference.md
+          for pkg in $(go list ./...); do
+            echo "---" >> docs/api-reference.md
+            echo "## \`${pkg}\`" >> docs/api-reference.md
+            echo "" >> docs/api-reference.md
+            go doc -all "${pkg}" >> docs/api-reference.md 2>/dev/null || true
+            echo "" >> docs/api-reference.md
+          done
 
       - name: Upload API docs artifact
         uses: actions/upload-artifact@v4
