@@ -86,3 +86,7 @@ issues:
     - linters:
         - revive
       text: "stutters"
+    # envelope.go intentionally returns nil error when raw bytes are a valid fallback
+    - path: backend/envelope\.go
+      linters:
+        - nilerr

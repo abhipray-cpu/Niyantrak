@@ -150,7 +150,7 @@ func TestTokenBucket_Allow_Basic(t *testing.T) {
 	assertFloatEqual(t, 9, bucketResult.RemainingTokens)
 
 	// Second request - should have 9 tokens left
-	newState, result, err = algo.Allow(ctx, newState, 1)
+	_, result, err = algo.Allow(ctx, newState, 1)
 	require.NoError(t, err)
 
 	bucketResult, ok = result.(*TokenBucketResult)
@@ -174,7 +174,7 @@ func TestTokenBucket_Allow_Deny(t *testing.T) {
 	require.NoError(t, err)
 
 	// Next request should be denied
-	newState, result, err := algo.Allow(ctx, newState, 1)
+	_, result, err := algo.Allow(ctx, newState, 1)
 	require.NoError(t, err)
 
 	bucketResult, ok := result.(*TokenBucketResult)
@@ -210,7 +210,7 @@ func TestTokenBucket_Allow_Refill(t *testing.T) {
 		LastRefillTime: oldTime,
 	}
 
-	newState, result, err := algo.Allow(ctx, testState, 3)
+	_, result, err := algo.Allow(ctx, testState, 3)
 	require.NoError(t, err)
 
 	bucketResult := result.(*TokenBucketResult)

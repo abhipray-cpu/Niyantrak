@@ -82,16 +82,17 @@ func Unwrap(raw []byte) (interface{}, error) {
 		return nil, nil
 	}
 
-	// Probe for envelope structure.
+	// Probe for envelope structure. If raw is not a JSON object with a "_type"
+	// field, treat it as a plain value (not an envelope).
 	var probe struct {
 		Type string `json:"_type"`
 	}
-	probeErr := json.Unmarshal(raw, &probe)
-	if probeErr != nil || probe.Type == "" {
+	isEnvelope := json.Unmarshal(raw, &probe) == nil && probe.Type != ""
+	if !isEnvelope {
 		// Not an envelope — return as plain value.
 		var v interface{}
-		if jsonErr := json.Unmarshal(raw, &v); jsonErr != nil {
-			// Not valid JSON either — return the raw bytes as a string.
+		if json.Unmarshal(raw, &v) != nil {
+			// Not valid JSON — return the raw bytes as a string.
 			return string(raw), nil
 		}
 		return v, nil
