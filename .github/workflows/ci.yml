@@ -7,7 +7,7 @@ on:
     branches: [ main, develop ]
   schedule:
     # Nightly at 02:00 UTC
-    - cron: '0 2 * * *'
+    - cron: '0 2 * * 1'
 
 # Cancel in-progress runs on the same branch when a new push arrives.
 concurrency:
